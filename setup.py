@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pytorch_basics_library",
-    version="0.3.0",
+    version="0.4.0",
     author="Peyton Tolbert",
     author_email="email@peytontolbert.com",
     description="A lightweight, high-performance library providing essential utilities for PyTorch development",
