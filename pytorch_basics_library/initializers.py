@@ -21,16 +21,151 @@ Example:
 """
 
 import math
-from typing import Optional, Union, Dict, TypeVar, Tuple, Type, Literal
+from typing import Optional, Union, Dict, TypeVar, Tuple, Type, Literal, Any, Callable
 import torch
 import torch.nn as nn
 from .device_management import device_manager
 from .tensor_utils import tensor_ops
+import torch.nn.init as init
 
 # Type variables
 T = TypeVar('T', bound=torch.Tensor)
 M = TypeVar('M', bound=nn.Module)
 InitStr = Literal['xavier', 'kaiming', 'uniform', 'normal', 'orthogonal']
+
+def xavier_uniform_(
+    tensor: torch.Tensor,
+    gain: float = 1.0,
+    **kwargs: Any
+) -> torch.Tensor:
+    """Xavier uniform initialization with gain support.
+    
+    Args:
+        tensor: Tensor to initialize
+        gain: Scaling factor
+        **kwargs: Additional arguments (for compatibility)
+        
+    Returns:
+        Initialized tensor
+        
+    Example:
+        >>> tensor = torch.empty(10, 20)
+        >>> xavier_uniform_(tensor, gain=2.0)
+    """
+    return init.xavier_uniform_(tensor, gain=gain)
+
+def xavier_normal_(
+    tensor: torch.Tensor,
+    gain: float = 1.0,
+    **kwargs: Any
+) -> torch.Tensor:
+    """Xavier normal initialization with gain support.
+    
+    Args:
+        tensor: Tensor to initialize
+        gain: Scaling factor
+        **kwargs: Additional arguments (for compatibility)
+        
+    Returns:
+        Initialized tensor
+    """
+    return init.xavier_normal_(tensor, gain=gain)
+
+def kaiming_uniform_(
+    tensor: torch.Tensor,
+    mode: str = 'fan_in',
+    nonlinearity: str = 'leaky_relu',
+    **kwargs: Any
+) -> torch.Tensor:
+    """Kaiming uniform initialization with mode and nonlinearity support.
+    
+    Args:
+        tensor: Tensor to initialize
+        mode: Either 'fan_in' or 'fan_out'
+        nonlinearity: Nonlinearity function name
+        **kwargs: Additional arguments (for compatibility)
+        
+    Returns:
+        Initialized tensor
+    """
+    return init.kaiming_uniform_(tensor, mode=mode, nonlinearity=nonlinearity)
+
+def kaiming_normal_(
+    tensor: torch.Tensor,
+    mode: str = 'fan_in',
+    nonlinearity: str = 'leaky_relu',
+    **kwargs: Any
+) -> torch.Tensor:
+    """Kaiming normal initialization with mode and nonlinearity support.
+    
+    Args:
+        tensor: Tensor to initialize
+        mode: Either 'fan_in' or 'fan_out'
+        nonlinearity: Nonlinearity function name
+        **kwargs: Additional arguments (for compatibility)
+        
+    Returns:
+        Initialized tensor
+    """
+    return init.kaiming_normal_(tensor, mode=mode, nonlinearity=nonlinearity)
+
+def orthogonal_(
+    tensor: torch.Tensor,
+    gain: float = 1.0,
+    **kwargs: Any
+) -> torch.Tensor:
+    """Orthogonal initialization with gain support.
+    
+    Args:
+        tensor: Tensor to initialize
+        gain: Scaling factor
+        **kwargs: Additional arguments (for compatibility)
+        
+    Returns:
+        Initialized tensor
+    """
+    return init.orthogonal_(tensor, gain=gain)
+
+def uniform_(
+    tensor: torch.Tensor,
+    a: float = 0.0,
+    b: float = 1.0,
+    **kwargs: Any
+) -> torch.Tensor:
+    """Uniform initialization with bounds support.
+    
+    Args:
+        tensor: Tensor to initialize
+        a: Lower bound
+        b: Upper bound
+        **kwargs: Additional arguments (for compatibility)
+        
+    Returns:
+        Initialized tensor
+    """
+    return init.uniform_(tensor, a=a, b=b)
+
+def normal_(
+    tensor: torch.Tensor,
+    mean: float = 0.0,
+    std: float = 1.0,
+    **kwargs: Any
+) -> torch.Tensor:
+    """Normal initialization with mean and std support.
+    
+    Args:
+        tensor: Tensor to initialize
+        mean: Mean of the normal distribution
+        std: Standard deviation
+        **kwargs: Additional arguments (for compatibility)
+        
+    Returns:
+        Initialized tensor
+    """
+    return init.normal_(tensor, mean=mean, std=std)
+
+# Add type alias for initialization functions
+InitFn = Callable[[torch.Tensor, ...], torch.Tensor]
 
 class Initializer:
     """Base class for weight initialization strategies.
@@ -115,6 +250,38 @@ class Initializer:
         tensor.requires_grad_(requires_grad)
         self.initialize(tensor)
         return tensor
+
+    @staticmethod
+    def _calculate_fans(tensor: torch.Tensor) -> Tuple[int, int]:
+        """Calculate fan in and fan out.
+        
+        Args:
+            tensor: Input tensor
+            
+        Returns:
+            Tuple of (fan_in, fan_out)
+            
+        Raises:
+            ValueError: If tensor has fewer than 2 dimensions
+        """
+        dimensions = tensor.dim()
+        if dimensions < 2:
+            raise ValueError(
+                f"Fan in and fan out require at least 2D tensor, got {dimensions}D"
+            )
+            
+        if dimensions == 2:  # Linear
+            fan_in, fan_out = tensor.size(1), tensor.size(0)
+        else:  # Convolution
+            num_input_fmaps = tensor.size(1)
+            num_output_fmaps = tensor.size(0)
+            receptive_field_size = 1
+            for i in range(2, dimensions):
+                receptive_field_size *= tensor.size(i)
+            fan_in = num_input_fmaps * receptive_field_size
+            fan_out = num_output_fmaps * receptive_field_size
+            
+        return fan_in, fan_out
 
 class XavierInitializer(Initializer):
     """Xavier/Glorot initialization strategy.
@@ -415,35 +582,30 @@ class OrthogonalInitializer(Initializer):
 
 def initialize_model(
     model: M,
-    initializer: Union[InitStr, Initializer],
+    initializer: Union[InitStr, Initializer, InitFn],
     initializer_config: Optional[Dict] = None,
     device: Optional[Union[str, torch.device]] = None
 ) -> M:
     """Initialize weights of a model using specified initializer.
     
-    This function applies the specified initialization strategy to all weight
-    parameters in the model. Bias parameters are initialized to zero.
-    
     Args:
         model: PyTorch model to initialize
-        initializer: String name of initializer or Initializer instance
+        initializer: String name, Initializer instance, or initialization function
         initializer_config: Configuration for initializer if string name is used
         device: Device to move model to after initialization
         
     Returns:
         The initialized model
         
-    Raises:
-        ValueError: If initializer string is invalid
-        TypeError: If model is not a nn.Module
-        
     Example:
         >>> model = nn.Linear(10, 5)
-        >>> # Using string name with device
-        >>> model = initialize_model(model, 'xavier', {'gain': 2.0}, device='cuda:0')
+        >>> # Using string name
+        >>> model = initialize_model(model, 'xavier', {'gain': 2.0})
+        >>> # Using function
+        >>> model = initialize_model(model, kaiming_normal_)
         >>> # Using initializer instance
         >>> init = KaimingInitializer(mode='fan_out')
-        >>> model = initialize_model(model, init, device='cuda')
+        >>> model = initialize_model(model, init)
     """
     if not isinstance(model, nn.Module):
         raise TypeError(
@@ -470,13 +632,16 @@ def initialize_model(
                 f"Unknown initializer: {initializer}. "
                 "Valid options are: xavier, kaiming, uniform, normal, orthogonal"
             )
+        init_fn = init.initialize
+    elif isinstance(initializer, Initializer):
+        init_fn = initializer.initialize
     else:
-        init = initializer
+        init_fn = initializer
     
     # Initialize parameters
     for name, param in model.named_parameters():
         if 'weight' in name:
-            init.initialize(param)
+            init_fn(param)
         elif 'bias' in name:
             nn.init.constant_(param, 0)
     

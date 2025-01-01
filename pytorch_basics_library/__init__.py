@@ -26,13 +26,22 @@ from typing import List, Union, Callable, Optional, Any
 from .device_management import device_manager
 from .tensor_utils import tensor_ops
 from .initializers import (
-    initialize_model,
-    xavier_uniform,
-    xavier_normal,
-    kaiming_uniform,
-    kaiming_normal,
-    uniform,
-    normal
+    # Classes
+    Initializer, XavierInitializer, KaimingInitializer,
+    UniformInitializer, NormalInitializer, OrthogonalInitializer,
+    
+    # Functions
+    xavier_uniform_, xavier_normal_,
+    kaiming_uniform_, kaiming_normal_,
+    orthogonal_, uniform_, normal_,
+    
+    # Default instances
+    xavier_uniform, xavier_normal,
+    kaiming_uniform, kaiming_normal,
+    uniform, normal, orthogonal,
+    
+    # Utility functions
+    initialize_model
 )
 
 __version__ = '0.1.0'
@@ -40,13 +49,24 @@ __author__ = 'Peyton Tolbert'
 __email__ = 'email@peytontolbert.com'
 
 __all__: List[str] = [
-    'device_manager',
-    'tensor_ops',
+    # Classes
+    'Initializer', 'XavierInitializer', 'KaimingInitializer',
+    'UniformInitializer', 'NormalInitializer', 'OrthogonalInitializer',
+    
+    # Functions
+    'xavier_uniform_', 'xavier_normal_',
+    'kaiming_uniform_', 'kaiming_normal_',
+    'orthogonal_', 'uniform_', 'normal_',
+    
+    # Default instances
+    'xavier_uniform', 'xavier_normal',
+    'kaiming_uniform', 'kaiming_normal',
+    'uniform', 'normal', 'orthogonal',
+    
+    # Utility functions
     'initialize_model',
-    'xavier_uniform',
-    'xavier_normal',
-    'kaiming_uniform',
-    'kaiming_normal',
-    'uniform',
-    'normal'
+    
+    # Managers
+    'device_manager',
+    'tensor_ops'
 ] 
