@@ -28,7 +28,7 @@ import torch.nn as nn
 # Type variables
 T = TypeVar('T', bound=torch.Tensor)
 M = TypeVar('M', bound=nn.Module)
-InitStr = Literal['xavier', 'kaiming', 'uniform', 'normal']
+InitStr = Literal['xavier', 'kaiming', 'uniform', 'normal', 'orthogonal']
 
 class Initializer:
     """Base class for weight initialization strategies.
@@ -299,6 +299,69 @@ class NormalInitializer(Initializer):
         self._validate_parameters(tensor)
         nn.init.normal_(tensor, self.mean, self.std)
 
+class OrthogonalInitializer(Initializer):
+    """Orthogonal initialization strategy.
+    
+    Creates an orthogonal matrix using QR decomposition. This initialization
+    helps preserve the magnitude of gradients during backpropagation.
+    
+    Example:
+        >>> initializer = OrthogonalInitializer(gain=2.0)
+        >>> tensor = torch.empty(10, 20)
+        >>> initializer.initialize(tensor)
+        >>> # Check orthogonality: product with transpose should be close to identity
+        >>> product = tensor @ tensor.t()
+        >>> print(torch.allclose(product, torch.eye(10), atol=1e-7))  # True
+    """
+    
+    def __init__(self, gain: float = 1.0) -> None:
+        """Initialize OrthogonalInitializer.
+        
+        Args:
+            gain: Scaling factor for the weights
+            
+        Raises:
+            ValueError: If gain is not positive
+        """
+        if gain <= 0:
+            raise ValueError(f"Gain must be positive, got {gain}")
+        
+        self.gain = gain
+    
+    def initialize(self, tensor: T) -> None:
+        """Initialize using orthogonal matrices.
+        
+        Args:
+            tensor: The tensor to initialize
+            
+        Raises:
+            ValueError: If tensor has fewer than 2 dimensions
+        """
+        self._validate_parameters(tensor)
+        
+        if tensor.dim() < 2:
+            raise ValueError(
+                f"Orthogonal initialization requires at least 2D tensor, got {tensor.dim()}D"
+            )
+        
+        rows, cols = tensor.size(0), tensor.size(1)
+        flattened_shape = (rows, cols * tensor[0].numel() // cols)
+        
+        # Generate a random matrix
+        random_mat = torch.randn(flattened_shape)
+        
+        # Compute QR factorization
+        q, r = torch.linalg.qr(random_mat)
+        
+        # Make Q uniform according to https://arxiv.org/pdf/math-ph/0609050.pdf
+        d = torch.diag(r, 0)
+        ph = d.sign()
+        q *= ph
+        
+        # Reshape to original tensor shape
+        tensor.view_as(q).copy_(q)
+        tensor.mul_(self.gain)
+
 def initialize_model(
     model: M,
     initializer: Union[InitStr, Initializer],
@@ -347,10 +410,12 @@ def initialize_model(
             init = UniformInitializer(**initializer_config)
         elif initializer == 'normal':
             init = NormalInitializer(**initializer_config)
+        elif initializer == 'orthogonal':
+            init = OrthogonalInitializer(**initializer_config)
         else:
             raise ValueError(
                 f"Unknown initializer: {initializer}. "
-                "Valid options are: xavier, kaiming, uniform, normal"
+                "Valid options are: xavier, kaiming, uniform, normal, orthogonal"
             )
     else:
         init = initializer
@@ -369,4 +434,5 @@ xavier_normal = XavierInitializer(distribution='normal')
 kaiming_uniform = KaimingInitializer(distribution='uniform')
 kaiming_normal = KaimingInitializer(distribution='normal')
 uniform = UniformInitializer()
-normal = NormalInitializer() 
+normal = NormalInitializer()
+orthogonal = OrthogonalInitializer() 
