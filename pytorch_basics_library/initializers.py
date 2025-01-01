@@ -24,6 +24,8 @@ import math
 from typing import Optional, Union, Dict, TypeVar, Tuple, Type, Literal
 import torch
 import torch.nn as nn
+from .device_management import device_manager
+from .tensor_utils import tensor_ops
 
 # Type variables
 T = TypeVar('T', bound=torch.Tensor)
@@ -82,6 +84,37 @@ class Initializer:
             tensor: The tensor to initialize
         """
         self.initialize(tensor)
+
+    def create_tensor(
+        self,
+        size: Tuple[int, ...],
+        dtype: Optional[torch.dtype] = None,
+        device: Optional[Union[str, torch.device]] = None,
+        requires_grad: bool = False
+    ) -> torch.Tensor:
+        """Create and initialize a new tensor.
+        
+        Args:
+            size: Shape of the tensor to create
+            dtype: Data type of the tensor
+            device: Device to place tensor on
+            requires_grad: Whether tensor requires gradients
+            
+        Returns:
+            Initialized tensor
+            
+        Example:
+            >>> initializer = XavierInitializer()
+            >>> tensor = initializer.create_tensor((10, 20), device='cuda:0')
+        """
+        tensor = tensor_ops.create_tensor(
+            [0] * len(size),  # Create empty tensor of right shape
+            dtype=dtype,
+            device=device
+        ).resize_(size)
+        tensor.requires_grad_(requires_grad)
+        self.initialize(tensor)
+        return tensor
 
 class XavierInitializer(Initializer):
     """Xavier/Glorot initialization strategy.
@@ -383,7 +416,8 @@ class OrthogonalInitializer(Initializer):
 def initialize_model(
     model: M,
     initializer: Union[InitStr, Initializer],
-    initializer_config: Optional[Dict] = None
+    initializer_config: Optional[Dict] = None,
+    device: Optional[Union[str, torch.device]] = None
 ) -> M:
     """Initialize weights of a model using specified initializer.
     
@@ -394,6 +428,7 @@ def initialize_model(
         model: PyTorch model to initialize
         initializer: String name of initializer or Initializer instance
         initializer_config: Configuration for initializer if string name is used
+        device: Device to move model to after initialization
         
     Returns:
         The initialized model
@@ -404,11 +439,11 @@ def initialize_model(
         
     Example:
         >>> model = nn.Linear(10, 5)
-        >>> # Using string name
-        >>> model = initialize_model(model, 'xavier', {'gain': 2.0})
+        >>> # Using string name with device
+        >>> model = initialize_model(model, 'xavier', {'gain': 2.0}, device='cuda:0')
         >>> # Using initializer instance
         >>> init = KaimingInitializer(mode='fan_out')
-        >>> model = initialize_model(model, init)
+        >>> model = initialize_model(model, init, device='cuda')
     """
     if not isinstance(model, nn.Module):
         raise TypeError(
@@ -438,11 +473,18 @@ def initialize_model(
     else:
         init = initializer
     
+    # Initialize parameters
     for name, param in model.named_parameters():
         if 'weight' in name:
             init.initialize(param)
         elif 'bias' in name:
             nn.init.constant_(param, 0)
+    
+    # Move to device if specified
+    if device is not None:
+        if isinstance(device, str):
+            device = torch.device(device)
+        model = model.to(device)
     
     return model
 
