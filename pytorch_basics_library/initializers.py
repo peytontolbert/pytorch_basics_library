@@ -75,6 +75,14 @@ class Initializer:
         """
         raise NotImplementedError("Subclasses must implement initialize method")
 
+    def __call__(self, tensor: T) -> None:
+        """Make initializer callable.
+        
+        Args:
+            tensor: The tensor to initialize
+        """
+        self.initialize(tensor)
+
 class XavierInitializer(Initializer):
     """Xavier/Glorot initialization strategy.
     
@@ -85,7 +93,9 @@ class XavierInitializer(Initializer):
     Example:
         >>> initializer = XavierInitializer(gain=2.0, distribution='normal')
         >>> tensor = torch.empty(10, 20)
-        >>> initializer.initialize(tensor)
+        >>> # Can be used either way:
+        >>> initializer.initialize(tensor)  # Using initialize method
+        >>> initializer(tensor)            # Using call method
         >>> print(tensor.std())  # Should be close to gain * sqrt(2/(fan_in + fan_out))
     """
     
@@ -176,7 +186,9 @@ class KaimingInitializer(Initializer):
     Example:
         >>> initializer = KaimingInitializer(mode='fan_out', nonlinearity='leaky_relu')
         >>> tensor = torch.empty(10, 20)
-        >>> initializer.initialize(tensor)
+        >>> # Can be used either way:
+        >>> initializer.initialize(tensor)  # Using initialize method
+        >>> initializer(tensor)            # Using call method
     """
     
     def __init__(
@@ -235,7 +247,9 @@ class UniformInitializer(Initializer):
     Example:
         >>> initializer = UniformInitializer(a=-0.5, b=0.5)
         >>> tensor = torch.empty(10, 20)
-        >>> initializer.initialize(tensor)
+        >>> # Can be used either way:
+        >>> initializer.initialize(tensor)  # Using initialize method
+        >>> initializer(tensor)            # Using call method
         >>> print(tensor.min(), tensor.max())  # Should be close to (-0.5, 0.5)
     """
     
@@ -270,7 +284,9 @@ class NormalInitializer(Initializer):
     Example:
         >>> initializer = NormalInitializer(mean=0.0, std=0.01)
         >>> tensor = torch.empty(10, 20)
-        >>> initializer.initialize(tensor)
+        >>> # Can be used either way:
+        >>> initializer.initialize(tensor)  # Using initialize method
+        >>> initializer(tensor)            # Using call method
         >>> print(tensor.mean(), tensor.std())  # Should be close to (0.0, 0.01)
     """
     
@@ -308,7 +324,9 @@ class OrthogonalInitializer(Initializer):
     Example:
         >>> initializer = OrthogonalInitializer(gain=2.0)
         >>> tensor = torch.empty(10, 20)
-        >>> initializer.initialize(tensor)
+        >>> # Can be used either way:
+        >>> initializer.initialize(tensor)  # Using initialize method
+        >>> initializer(tensor)            # Using call method
         >>> # Check orthogonality: product with transpose should be close to identity
         >>> product = tensor @ tensor.t()
         >>> print(torch.allclose(product, torch.eye(10), atol=1e-7))  # True
